@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quizcontroller');
@@ -16,6 +17,9 @@ router.post('/create', authMiddleware, adminMiddleware, quizCreateValidator, qui
 
 // Student: Get all quizzes
 router.get('/all', authMiddleware, studentMiddleware, quizController.getAllQuizzes);
+
+// Admin: Update quiz
+router.put('/update/:id', authMiddleware, adminMiddleware, quizController.updateQuiz);
 
 // Student: Submit quiz answers
 router.post('/submit', authMiddleware, studentMiddleware, quizController.submitQuiz);

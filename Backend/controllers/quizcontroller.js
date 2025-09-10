@@ -1,3 +1,19 @@
+// Admin: Update quiz
+exports.updateQuiz = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { title, questions } = req.body;
+		const updated = await Quiz.findByIdAndUpdate(
+			id,
+			{ title, questions },
+			{ new: true }
+		);
+		if (!updated) return res.status(404).json({ message: 'Quiz not found' });
+		res.json({ message: 'Quiz updated', quiz: updated });
+	} catch (err) {
+		res.status(500).json({ message: 'Server error', error: err.message });
+	}
+};
 // Admin: Delete quiz
 exports.deleteQuiz = async (req, res) => {
 	try {

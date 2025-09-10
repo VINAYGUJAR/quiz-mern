@@ -39,9 +39,7 @@ export default function ManageQuizzes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (editId) {
-      // No backend update endpoint, so delete and re-add
-      await axios.delete(`/quiz/${editId}`);
-      await axios.post("/quiz/create", form);
+      await axios.put(`/quiz/update/${editId}`, form);
     } else {
       await axios.post("/quiz/create", form);
     }
