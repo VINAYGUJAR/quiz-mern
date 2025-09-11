@@ -14,13 +14,15 @@ exports.updateQuiz = async (req, res) => {
 		res.status(500).json({ message: 'Server error', error: err.message });
 	}
 };
-// Admin: Delete quiz
+// Admin: Delete quiz (and all related results)
 exports.deleteQuiz = async (req, res) => {
 	try {
 		const { id } = req.params;
 		const deleted = await Quiz.findByIdAndDelete(id);
 		if (!deleted) return res.status(404).json({ message: 'Quiz not found' });
-		res.json({ message: 'Quiz deleted' });
+		// Delete all results related to this quiz
+		await Result.deleteMany({ quizId: id });
+		res.json({ message: 'Quiz and related results deleted' });
 	} catch (err) {
 		res.status(500).json({ message: 'Server error', error: err.message });
 	}
@@ -77,7 +79,7 @@ try {
 	let score = 0;
 	answers.forEach((ans) => {
 		const q = quiz.questions[ans.questionIndex];
-		if (q && q.correctAnswer === ans.selectedOption) score += 1;
+		if (q && Number(q.correctAnswer) === Number(ans.selectedOption)) score += 1;
 	});
 
 	const result = await Result.create({ userId: req.user._id, quizId, answers, score });

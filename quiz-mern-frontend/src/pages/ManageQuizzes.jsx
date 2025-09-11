@@ -15,14 +15,20 @@ export default function ManageQuizzes() {
 
   const handleFormChange = (e, idx, optIdx) => {
     if (typeof idx === "number") {
-      // Question or option change
-      const updated = { ...form };
+      // Deep copy questions and options, always ensure correctAnswer is a number
+      const updatedQuestions = form.questions.map((q, i) => ({
+        ...q,
+        options: [...q.options],
+        correctAnswer: typeof q.correctAnswer === "number" ? q.correctAnswer : Number(q.correctAnswer)
+      }));
       if (typeof optIdx === "number") {
-        updated.questions[idx].options[optIdx] = e.target.value;
+        updatedQuestions[idx].options[optIdx] = e.target.value;
+      } else if (e.target.name === "correctAnswer") {
+        updatedQuestions[idx].correctAnswer = Number(e.target.value);
       } else {
-        updated.questions[idx][e.target.name] = e.target.value;
+        updatedQuestions[idx][e.target.name] = e.target.value;
       }
-      setForm(updated);
+      setForm({ ...form, questions: updatedQuestions });
     } else {
       setForm({ ...form, [e.target.name]: e.target.value });
     }
@@ -55,7 +61,7 @@ export default function ManageQuizzes() {
       questions: quiz.questions.map(q => ({
         question: q.question,
         options: q.options,
-        correctAnswer: q.correctAnswer
+        correctAnswer: typeof q.correctAnswer === "number" ? q.correctAnswer : Number(q.correctAnswer)
       }))
     });
     setEditId(quiz._id);
@@ -87,8 +93,14 @@ export default function ManageQuizzes() {
                 <input key={optIdx} className="w-full border p-2 rounded mb-1" placeholder={`Option ${optIdx + 1}`} value={opt} onChange={e => handleFormChange(e, idx, optIdx)} required />
               ))}
               <label className="block mt-2">Correct Answer:
-                <select className="ml-2 border p-1 rounded" value={q.correctAnswer} onChange={e => handleFormChange({ target: { name: "correctAnswer", value: Number(e.target.value) } }, idx)}>
-                  {q.options.map((_, i) => <option key={i} value={i}>{`Option ${i + 1}`}</option>)}
+                <select
+                  className="ml-2 border p-1 rounded"
+                  value={typeof q.correctAnswer === 'number' ? q.correctAnswer : Number(q.correctAnswer)}
+                  onChange={e => handleFormChange({ target: { name: "correctAnswer", value: e.target.value } }, idx)}
+                >
+                  {q.options.map((_, i) => (
+                    <option key={i} value={i}>{`Option ${i + 1}`}</option>
+                  ))}
                 </select>
               </label>
               {form.questions.length > 1 && <button type="button" className="text-red-600 mt-2" onClick={() => removeQuestion(idx)}>Remove Question</button>}

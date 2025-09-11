@@ -21,7 +21,6 @@ function Register() {
         <input className="w-full border p-2 rounded" type="password" placeholder="Password" onChange={e => setForm({...form, password: e.target.value})}/>
         <select className="w-full border p-2 rounded" onChange={e => setForm({...form, role: e.target.value})}>
           <option value="student">Student</option>
-          <option value="admin">Admin</option>
         </select>
         <button className="w-full bg-blue-600 text-white py-2 rounded">Register</button>
       </form>
