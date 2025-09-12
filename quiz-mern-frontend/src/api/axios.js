@@ -1,6 +1,6 @@
 import axios from "axios";
 
 export default axios.create({
-  baseURL: "http://localhost:5000" || process.env.VITE_API_URL,
+  baseURL: "https://quiz-mern-6oo1.onrender.com",
   withCredentials: true
 });
