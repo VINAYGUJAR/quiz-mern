@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const User = require('../models/user');
+const User = require('../models/User');
 
 
 const createTokenAndSetCookie = (res, user) => {
@@ -16,7 +16,7 @@ maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
 };
 res.cookie('token', token, cookieOptions);
 };
-
+//he
 
 exports.register = async (req, res) => {
 const errors = validationResult(req);

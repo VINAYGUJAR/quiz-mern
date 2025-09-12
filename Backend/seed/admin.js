@@ -2,7 +2,7 @@
 // This script seeds a single admin user. Run manually as needed.
 const mongoose = require('mongoose');
 const bcrypt = require("bcryptjs");
-const User = require('../models/user');
+const User = require('../models/User');
 require('dotenv').config();
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/quizdb';
