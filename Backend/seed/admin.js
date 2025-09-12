@@ -1,7 +1,7 @@
 
 // This script seeds a single admin user. Run manually as needed.
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const bcrypt = require("bcryptjs");
 const User = require('../models/user');
 require('dotenv').config();
 
