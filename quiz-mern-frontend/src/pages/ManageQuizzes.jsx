@@ -1,11 +1,21 @@
-
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 
 export default function ManageQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
+  const [showForm, setShowForm] = useState(() => {
+  return localStorage.getItem("showForm") === "true"; 
+});
+
+useEffect(() => {
+  localStorage.setItem("showForm", showForm);
+}, [showForm]);
+
+  const [form, setForm] = useState({ 
+    title: "", 
+    timeLimit: "", // <- ADDED: time limit in minutes (string or number)
+    questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }]
+  });
   const [editId, setEditId] = useState(null);
 
   const fetchQuizzes = () => {
@@ -50,7 +60,7 @@ export default function ManageQuizzes() {
       await axios.post("/quiz/create", form);
     }
     setShowForm(false);
-    setForm({ title: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
+    setForm({ title: "", timeLimit: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
     setEditId(null);
     fetchQuizzes();
   };
@@ -58,6 +68,7 @@ export default function ManageQuizzes() {
   const handleEdit = (quiz) => {
     setForm({
       title: quiz.title,
+      timeLimit: quiz.timeLimit || "", // <- ADDED: load existing timeLimit if present
       questions: quiz.questions.map(q => ({
         question: q.question,
         options: q.options,
@@ -91,7 +102,7 @@ export default function ManageQuizzes() {
         onClick={() => { 
           setShowForm(!showForm); 
           setEditId(null); 
-          setForm({ title: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] }); 
+          setForm({ title: "", timeLimit: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] }); 
         }}
       >
         {showForm ? "← Cancel" : "✨ Create New Quiz"}
@@ -106,9 +117,21 @@ export default function ManageQuizzes() {
             onChange={handleFormChange} 
             required 
           />
+
+          {/* ADDED: timeLimit input (minutes) — placed directly after title as requested */}
+          <input
+            className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg mb-2 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all text-base sm:text-lg"
+            type="number"
+            name="timeLimit"
+            placeholder="Time limit (minutes)"
+            value={form.timeLimit}
+            onChange={handleFormChange}
+            required
+          />
+
           {form.questions.map((q, idx) => (
             <div key={idx} className="bg-gradient-to-br from-white to-indigo-50 border-2 border-indigo-100 p-4 sm:p-6 rounded-xl mb-4 shadow-md hover:shadow-lg transition-all">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items:center sm:justify-between gap-2 sm:gap-4 mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold text-indigo-900">Question {idx + 1}</h3>
                 {form.questions.length > 1 && (
                   <button 
@@ -185,7 +208,10 @@ export default function ManageQuizzes() {
           )}
           {quizzes.map(q => (
             <li key={q._id} className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-indigo-50 rounded-lg transition-all px-3 sm:px-4">
-              <span className="font-semibold text-base sm:text-lg text-indigo-900">{q.title}</span>
+              <span className="font-semibold text-base sm:text-lg text-indigo-900">
+                {q.title}
+                {q.timeLimit && <span className="ml-2 text-sm text-gray-500">(⏱ {q.timeLimit} min)</span>}
+              </span>
               <div className="flex items-center gap-2 sm:gap-3">
                 <button 
                   className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all font-medium flex items-center justify-center gap-2" 

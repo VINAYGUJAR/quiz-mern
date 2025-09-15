@@ -40,6 +40,84 @@ export default function TakeQuiz() {
   const lastViolationTsRef = useRef(0);
   const COOLDOWN_MS = 700; // debounce blur+visibility events
 
+  // keys for localStorage
+const startTimeKey = `quiz-start-time:${quizId}:${ownerId}`;
+
+  // Add state for timer
+const [timeLeft, setTimeLeft] = useState(null);
+
+const handleManualSubmit = async () => {
+  if (submittedRef.current || !quiz?._id) return; // removed quizEnded check
+  submittedRef.current = true;
+  setSubmitting(true);
+  setQuizEnded(true); // lock the UI
+  localStorage.setItem(endedKey, "true");
+
+  try {
+    const payload = { quizId: quiz._id, answers: buildAnswersArray() };
+    const res = await axios.post("/quiz/submit", payload);
+    alert("✅ Quiz submitted (score hidden).");
+    navigate("/quizzes");
+  } catch (err) {
+    console.error("Manual submit failed:", err.response || err);
+    alert("Failed to submit. Please try again.");
+    submittedRef.current = false;
+    setSubmitting(false);
+    setQuizEnded(false);
+    localStorage.setItem(endedKey, "false");
+  }
+};
+
+// After quiz is loaded, calculate time left based on startTime
+useEffect(() => {
+  if (!quiz || !quiz.timeLimit || quizEnded) return;
+
+  let startTime = localStorage.getItem(startTimeKey);
+
+  if (!startTime) {
+    // first time starting this quiz → set start time
+    startTime = Date.now();
+    localStorage.setItem(startTimeKey, String(startTime));
+  } else {
+    startTime = Number(startTime);
+  }
+
+  const endTime = startTime + quiz.timeLimit * 60 * 1000;
+  const initialLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+  setTimeLeft(initialLeft);
+}, [quiz, quizEnded]);
+
+// Countdown effect
+useEffect(() => {
+  if (timeLeft === null || quizEnded) return;
+  if (timeLeft <= 0) {
+    // time over -> auto submit
+    autoSubmit();
+    return;
+  }
+
+ const timer = setInterval(() => {
+    setTimeLeft((prev) => {
+      if (prev <= 1) {
+        clearInterval(timer);
+        autoSubmit();
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, [timeLeft, quizEnded]);
+
+// Format time for display
+const formatTime = (sec) => {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
+
   // fetch quiz
   useEffect(() => {
     let mounted = true;
@@ -75,28 +153,7 @@ export default function TakeQuiz() {
     selectedOption: Number(optIndex)
   }));
 
-  // manual submit (button)
-  const handleManualSubmit = async () => {
-    if (submittedRef.current || quizEnded || !quiz?._id) return;
-    submittedRef.current = true;
-    setSubmitting(true);
-    setQuizEnded(true);
-    localStorage.setItem(endedKey, "true");
-
-    try {
-      await axios.post("/quiz/submit", { quizId: quiz._id, answers: buildAnswersArray() });
-      alert("✅ Quiz submitted (score hidden).");
-      navigate("/quizzes");
-    } catch (err) {
-      console.error("Manual submit failed:", err);
-      alert("Failed to submit. Please try again.");
-      submittedRef.current = false;
-      setSubmitting(false);
-      setQuizEnded(false);
-      localStorage.setItem(endedKey, "false");
-    }
-  };
-
+ 
   // auto-submit (3rd violation) — keeps best-effort using fetch keepalive/sendBeacon
   const autoSubmit = async () => {
     if (submittedRef.current || quizEnded || !quiz?._id) return;
@@ -162,7 +219,7 @@ export default function TakeQuiz() {
       } else if (newV === 2) {
         setWarningMessage("⚠️ Warning 2: Last warning! Next switch will auto-submit your quiz.");
       } else if (newV >= 3) {
-        setWarningMessage("🚨 Auto-submitting due to multiple tab switches...");
+        setWarningMessage("🚨 Auto-submitting due to Time over or Multiple tab switches ...");
         // lock UI immediately and auto-submit
         setQuizEnded(true);
         localStorage.setItem(endedKey, "true");
@@ -253,11 +310,23 @@ export default function TakeQuiz() {
           
           <div className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">{quiz.title}</h2>
-              <span className="px-3 sm:px-4 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium whitespace-nowrap">
-                Question {currentQuestion + 1} of {quiz.questions.length}
-              </span>
-            </div>
+  <h2 className="text-xl sm:text-2xl font-bold text-gray-800 break-words">
+    {quiz.title}
+  </h2>
+  
+  <div className="flex flex-col items-end gap-2">
+    <span className="px-3 sm:px-4 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium whitespace-nowrap">
+      Question {currentQuestion + 1} of {quiz.questions.length}
+    </span>
+
+    {quiz.timeLimit && (
+      <span className={`px-3 py-1 rounded-full text-sm font-medium 
+        ${timeLeft <= 30 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+        ⏳ {formatTime(timeLeft)}
+      </span>
+    )}
+  </div>
+</div>
 
             <div className="mb-6 w-full bg-gray-200 rounded-full h-2">
               <div 

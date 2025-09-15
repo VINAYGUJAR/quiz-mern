@@ -11,7 +11,8 @@ correctAnswer: { type: Number, required: true } // index (0-based) to avoid expo
 const quizSchema = new mongoose.Schema({
 title: { type: String, required: true },
 questions: [questionSchema],
-createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+timeLimit: { type: Number, required: true } // ⏳ time in minutes
 }, { timestamps: true });
 
 

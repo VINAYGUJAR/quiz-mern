@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const User = require('../models/User');
+const User = require('../models/user');
 
 // ---------------------
 // Helper: Create JWT & Set Cookie
@@ -33,7 +33,7 @@ exports.register = async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: 'Email already registered' });
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 8);
     const user = await User.create({ username, email, password: hashed, role: 'student' });
 
     createTokenAndSetCookie(res, user);
