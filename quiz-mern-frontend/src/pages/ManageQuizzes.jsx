@@ -4,19 +4,20 @@ import axios from "../api/axios";
 export default function ManageQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
   const [showForm, setShowForm] = useState(() => {
-  return localStorage.getItem("showForm") === "true"; 
-});
+    return localStorage.getItem("showForm") === "true"; 
+  });
 
-useEffect(() => {
-  localStorage.setItem("showForm", showForm);
-}, [showForm]);
+  useEffect(() => {
+    localStorage.setItem("showForm", showForm);
+  }, [showForm]);
 
   const [form, setForm] = useState({ 
     title: "", 
-    timeLimit: "", // <- ADDED: time limit in minutes (string or number)
+    timeLimit: "", 
     questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }]
   });
   const [editId, setEditId] = useState(null);
+  const [uploadMethod, setUploadMethod] = useState('manual'); // 'manual' or 'file'
 
   const fetchQuizzes = () => {
     axios.get("/quiz/all-admin").then(res => setQuizzes(res.data.quizzes || []));
@@ -25,7 +26,6 @@ useEffect(() => {
 
   const handleFormChange = (e, idx, optIdx) => {
     if (typeof idx === "number") {
-      // Deep copy questions and options, always ensure correctAnswer is a number
       const updatedQuestions = form.questions.map((q, i) => ({
         ...q,
         options: [...q.options],
@@ -44,6 +44,82 @@ useEffect(() => {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const jsonData = JSON.parse(text);
+      
+      // Validate and extract quiz data
+      if (!jsonData.title || !jsonData.questions || !Array.isArray(jsonData.questions)) {
+        alert('Invalid JSON format. Please ensure your file contains title, timeLimit, and questions array.');
+        return;
+      }
+
+      // Process questions to ensure correct format
+      const processedQuestions = jsonData.questions.map(q => ({
+        question: q.question || '',
+        options: Array.isArray(q.options) ? q.options : ['', '', '', ''],
+        correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 
+                      (q.correctAnswer && typeof q.correctAnswer === 'object' && q.correctAnswer.$numberInt) 
+                      ? parseInt(q.correctAnswer.$numberInt) : 0
+      }));
+
+      // Extract timeLimit
+      let timeLimit = '';
+      if (jsonData.timeLimit) {
+        if (typeof jsonData.timeLimit === 'number') {
+          timeLimit = jsonData.timeLimit.toString();
+        } else if (typeof jsonData.timeLimit === 'object' && jsonData.timeLimit.$numberInt) {
+          timeLimit = jsonData.timeLimit.$numberInt.toString();
+        } else if (typeof jsonData.timeLimit === 'string') {
+          timeLimit = jsonData.timeLimit;
+        }
+      }
+
+      setForm({
+        title: jsonData.title,
+        timeLimit: timeLimit,
+        questions: processedQuestions
+      });
+
+      alert('Quiz data loaded successfully from file!');
+    } catch (error) {
+      alert('Error parsing JSON file. Please check the file format.');
+      console.error('JSON parsing error:', error);
+    }
+  };
+
+  const generateSampleJSON = () => {
+    const sampleQuiz = {
+      title: "Sample Quiz",
+      timeLimit: 10,
+      questions: [
+        {
+          question: "What is the capital of France?",
+          options: ["London", "Berlin", "Paris", "Madrid"],
+          correctAnswer: 2
+        },
+        {
+          question: "Which programming language is this component written in?",
+          options: ["Python", "JavaScript", "Java", "C++"],
+          correctAnswer: 1
+        }
+      ]
+    };
+
+    const dataStr = JSON.stringify(sampleQuiz, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sample-quiz.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const addQuestion = () => {
     setForm({ ...form, questions: [...form.questions, { question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
   };
@@ -52,31 +128,79 @@ useEffect(() => {
     setForm({ ...form, questions: form.questions.filter((_, i) => i !== idx) });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (editId) {
-      await axios.put(`/quiz/update/${editId}`, form);
-    } else {
-      await axios.post("/quiz/create", form);
+  const handleSubmit = async () => {
+    try {
+      // Validate form data
+      if (!form.title || !form.timeLimit || !form.questions || form.questions.length === 0) {
+        alert('Please fill in all required fields (title, time limit, and at least one question)');
+        return;
+      }
+
+      // Validate each question
+      for (let i = 0; i < form.questions.length; i++) {
+        const q = form.questions[i];
+        if (!q.question || !q.options || q.options.length !== 4) {
+          alert(`Question ${i + 1} is incomplete. Please ensure all questions have a question text and 4 options.`);
+          return;
+        }
+        
+        // Check if all options are filled
+        for (let j = 0; j < q.options.length; j++) {
+          if (!q.options[j] || q.options[j].trim() === '') {
+            alert(`Question ${i + 1}, Option ${j + 1} is empty. Please fill all options.`);
+            return;
+          }
+        }
+      }
+
+      if (editId) {
+        await axios.put(`/quiz/update/${editId}`, form);
+      } else {
+        await axios.post("/quiz/create", form);
+      }
+      setShowForm(false);
+      setForm({ title: "", timeLimit: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
+      setEditId(null);
+      setUploadMethod('manual');
+      fetchQuizzes();
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+      if (error.response && error.response.data && error.response.data.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else {
+        alert('Failed to save quiz. Please check your data and try again.');
+      }
     }
-    setShowForm(false);
-    setForm({ title: "", timeLimit: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] });
-    setEditId(null);
-    fetchQuizzes();
   };
 
   const handleEdit = (quiz) => {
     setForm({
       title: quiz.title,
-      timeLimit: quiz.timeLimit || "", // <- ADDED: load existing timeLimit if present
-      questions: quiz.questions.map(q => ({
-        question: q.question,
-        options: q.options,
-        correctAnswer: typeof q.correctAnswer === "number" ? q.correctAnswer : Number(q.correctAnswer)
-      }))
+      timeLimit: quiz.timeLimit || "",
+      questions: quiz.questions.map(q => {
+        let correctAnswer = 0; // default fallback
+        
+        if (typeof q.correctAnswer === "number") {
+          correctAnswer = q.correctAnswer;
+        } else if (q.correctAnswer && typeof q.correctAnswer === "object" && q.correctAnswer.$numberInt !== undefined) {
+          correctAnswer = parseInt(q.correctAnswer.$numberInt);
+        } else if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+          correctAnswer = Number(q.correctAnswer);
+        }
+        
+        // Ensure correctAnswer is within valid range (0-3)
+        correctAnswer = Math.max(0, Math.min(3, correctAnswer));
+        
+        return {
+          question: q.question,
+          options: q.options,
+          correctAnswer: correctAnswer
+        };
+      })
     });
     setEditId(quiz._id);
     setShowForm(true);
+    setUploadMethod('manual');
   };
 
   const handleDelete = async (id) => {
@@ -103,103 +227,199 @@ useEffect(() => {
           setShowForm(!showForm); 
           setEditId(null); 
           setForm({ title: "", timeLimit: "", questions: [{ question: "", options: ["", "", "", ""], correctAnswer: 0 }] }); 
+          setUploadMethod('manual');
         }}
       >
         {showForm ? "← Cancel" : "✨ Create New Quiz"}
       </button>
+      
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-4 sm:mb-6 md:mb-8 space-y-4 sm:space-y-6 bg-white p-4 sm:p-6 md:p-8 rounded-xl border border-indigo-100 shadow-lg">
-          <input 
-            className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all text-base sm:text-lg" 
-            name="title" 
-            placeholder="Enter Quiz Title..." 
-            value={form.title} 
-            onChange={handleFormChange} 
-            required 
-          />
-
-          {/* ADDED: timeLimit input (minutes) — placed directly after title as requested */}
-          <input
-            className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg mb-2 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all text-base sm:text-lg"
-            type="number"
-            name="timeLimit"
-            placeholder="Time limit (minutes)"
-            value={form.timeLimit}
-            onChange={handleFormChange}
-            required
-          />
-
-          {form.questions.map((q, idx) => (
-            <div key={idx} className="bg-gradient-to-br from-white to-indigo-50 border-2 border-indigo-100 p-4 sm:p-6 rounded-xl mb-4 shadow-md hover:shadow-lg transition-all">
-              <div className="flex flex-col sm:flex-row sm:items:center sm:justify-between gap-2 sm:gap-4 mb-4">
-                <h3 className="text-lg sm:text-xl font-semibold text-indigo-900">Question {idx + 1}</h3>
-                {form.questions.length > 1 && (
-                  <button 
-                    type="button" 
-                    className="w-full sm:w-auto px-3 sm:px-4 py-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all font-medium text-sm flex items-center justify-center sm:justify-start gap-2" 
-                    onClick={() => removeQuestion(idx)}
-                  >
-                    <span>Remove Question</span> 
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              <input 
-                className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg mb-4 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white" 
-                name="question" 
-                placeholder={`Enter question ${idx + 1}...`} 
-                value={q.question} 
-                onChange={e => handleFormChange(e, idx)} 
-                required 
-              />
-              {q.options.map((opt, optIdx) => (
-                <div key={optIdx} className="flex flex-col sm:flex-row items-start sm:items-center mb-3 gap-2 sm:gap-4">
-                  <span className="text-sm font-semibold text-indigo-600 w-full sm:w-24">Option {optIdx + 1}</span>
-                  <input 
-                    className="w-full flex-1 border-2 border-indigo-100 p-2 sm:p-3 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white" 
-                    placeholder={`Enter option ${optIdx + 1}...`} 
-                    value={opt} 
-                    onChange={e => handleFormChange(e, idx, optIdx)} 
-                    required 
-                  />
-                </div>
-              ))}
-              <label className="block mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center bg-indigo-50 p-3 sm:p-4 rounded-lg gap-2 sm:gap-4">
-                <span className="text-sm font-semibold text-indigo-700">Correct Answer:</span>
-                <select
-                  className="w-full sm:w-auto border-2 border-indigo-200 p-2 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white text-indigo-700 font-medium"
-                  value={typeof q.correctAnswer === 'number' ? q.correctAnswer : Number(q.correctAnswer)}
-                  onChange={e => handleFormChange({ target: { name: "correctAnswer", value: e.target.value } }, idx)}
-                >
-                  {q.options.map((_, i) => (
-                    <option key={i} value={i}>{`Option ${i + 1}`}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ))}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-4">
-            <button 
-              type="button" 
-              className="flex-1 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 px-4 sm:px-6 py-3 rounded-lg border-2 border-indigo-200 hover:border-indigo-300 transition-all font-semibold flex items-center justify-center gap-2" 
-              onClick={addQuestion}
+        <div className="mb-4 sm:mb-6 md:mb-8 space-y-4 sm:space-y-6 bg-white p-4 sm:p-6 md:p-8 rounded-xl border border-indigo-100 shadow-lg">
+          {/* Upload Method Selection */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
+            <button
+              type="button"
+              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                uploadMethod === 'manual' 
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              onClick={() => setUploadMethod('manual')}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-              </svg>
-              Add Question
+              📝 Manual Entry
             </button>
-            <button 
-              type="submit" 
-              className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 sm:px-6 py-3 rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+            <button
+              type="button"
+              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                uploadMethod === 'file' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              onClick={() => setUploadMethod('file')}
             >
-              {editId ? "✓ Update Quiz" : "✨ Create Quiz"}
+              📁 Upload JSON File
             </button>
           </div>
-        </form>
+
+          {/* File Upload Section */}
+          {uploadMethod === 'file' && (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-4 sm:p-6 mb-6">
+              <h3 className="text-lg font-semibold text-emerald-800 mb-4">Upload Quiz JSON File</h3>
+              <div className="space-y-4">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileUpload}
+                  className="w-full p-3 border-2 border-emerald-200 rounded-lg bg-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200"
+                />
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={generateSampleJSON}
+                    className="flex-1 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-all font-medium"
+                  >
+                    📥 Download Sample JSON
+                  </button>
+                </div>
+                <div className="text-sm text-emerald-700 bg-emerald-100 p-3 rounded-lg">
+                  <strong>Expected JSON format:</strong>
+                  <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
+{`{
+  "title": "Quiz Title",
+  "timeLimit": 10,
+  "questions": [
+    {
+      "question": "Your question?",
+      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+      "correctAnswer": 0
+    }
+  ]
+}`}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4 sm:space-y-6">
+            <input 
+              className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all text-base sm:text-lg" 
+              name="title" 
+              placeholder="Enter Quiz Title..." 
+              value={form.title} 
+              onChange={handleFormChange} 
+              required 
+            />
+
+            <input
+              className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg mb-2 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all text-base sm:text-lg"
+              type="number"
+              name="timeLimit"
+              placeholder="Time limit (minutes)"
+              value={form.timeLimit}
+              onChange={handleFormChange}
+              required
+            />
+
+            {uploadMethod === 'manual' && form.questions.map((q, idx) => (
+              <div key={idx} className="bg-gradient-to-br from-white to-indigo-50 border-2 border-indigo-100 p-4 sm:p-6 rounded-xl mb-4 shadow-md hover:shadow-lg transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+                  <h3 className="text-lg sm:text-xl font-semibold text-indigo-900">Question {idx + 1}</h3>
+                  {form.questions.length > 1 && (
+                    <button 
+                      type="button" 
+                      className="w-full sm:w-auto px-3 sm:px-4 py-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all font-medium text-sm flex items-center justify-center sm:justify-start gap-2" 
+                      onClick={() => removeQuestion(idx)}
+                    >
+                      <span>Remove Question</span> 
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <input 
+                  className="w-full border-2 border-indigo-100 p-3 sm:p-4 rounded-lg mb-4 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white" 
+                  name="question" 
+                  placeholder={`Enter question ${idx + 1}...`} 
+                  value={q.question} 
+                  onChange={e => handleFormChange(e, idx)} 
+                  required 
+                />
+                {q.options.map((opt, optIdx) => (
+                  <div key={optIdx} className="flex flex-col sm:flex-row items-start sm:items-center mb-3 gap-2 sm:gap-4">
+                    <span className="text-sm font-semibold text-indigo-600 w-full sm:w-24">Option {optIdx + 1}</span>
+                    <input 
+                      className="w-full flex-1 border-2 border-indigo-100 p-2 sm:p-3 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white" 
+                      placeholder={`Enter option ${optIdx + 1}...`} 
+                      value={opt} 
+                      onChange={e => handleFormChange(e, idx, optIdx)} 
+                      required 
+                    />
+                  </div>
+                ))}
+                <label className="block mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center bg-indigo-50 p-3 sm:p-4 rounded-lg gap-2 sm:gap-4">
+                  <span className="text-sm font-semibold text-indigo-700">Correct Answer:</span>
+                  <select
+                    className="w-full sm:w-auto border-2 border-indigo-200 p-2 rounded-lg focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none bg-white text-indigo-700 font-medium"
+                    value={typeof q.correctAnswer === 'number' ? q.correctAnswer : Number(q.correctAnswer)}
+                    onChange={e => handleFormChange({ target: { name: "correctAnswer", value: e.target.value } }, idx)}
+                  >
+                    {q.options.map((_, i) => (
+                      <option key={i} value={i}>{`Option ${i + 1}`}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ))}
+
+            {uploadMethod === 'file' && form.questions.length > 0 && (
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-4 sm:p-6">
+                <h3 className="text-lg font-semibold text-emerald-800 mb-4">Preview Loaded Questions</h3>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {form.questions.map((q, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded-lg border border-emerald-200">
+                      <p className="font-medium text-emerald-900 mb-2">{idx + 1}. {q.question}</p>
+                      <div className="text-sm text-emerald-700">
+                        {q.options.map((opt, optIdx) => (
+                          <span key={optIdx} className={`inline-block mr-2 px-2 py-1 rounded ${
+                            optIdx === q.correctAnswer ? 'bg-emerald-200 font-semibold' : 'bg-gray-100'
+                          }`}>
+                            {opt}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-4">
+              {uploadMethod === 'manual' && (
+                <button 
+                  type="button" 
+                  className="flex-1 bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 px-4 sm:px-6 py-3 rounded-lg border-2 border-indigo-200 hover:border-indigo-300 transition-all font-semibold flex items-center justify-center gap-2" 
+                  onClick={addQuestion}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                  </svg>
+                  Add Question
+                </button>
+              )}
+              <button 
+                type="button" 
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 sm:px-6 py-3 rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                onClick={handleSubmit}
+              >
+                {editId ? "✓ Update Quiz" : "✨ Create Quiz"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+      
       <div className="bg-white p-4 sm:p-6 md:p-8 rounded-xl border border-indigo-100 shadow-lg">
         <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-indigo-900 border-b border-indigo-100 pb-4">All Quizzes</h2>
         <ul className="divide-y divide-indigo-100">

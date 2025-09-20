@@ -418,10 +418,12 @@ const formatTime = (sec) => {
                   Reset
                 </button>
                 <button 
-                  onClick={handleManualSubmit} 
-                  disabled={submitting} 
-                  className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg disabled:opacity-60 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base"
-                >
+  onClick={handleManualSubmit} 
+  disabled={
+    submitting || Object.keys(answers).length !== quiz.questions.length
+  } 
+  className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg disabled:opacity-60 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center space-x-2 text-sm sm:text-base"
+>
                   {submitting ? (
                     <>
                       <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
