@@ -196,7 +196,7 @@ const formatTime = (sec) => {
     } finally {
       // lock UI and redirect
       setTimeout(() => {
-        alert("🚨 Quiz auto-submitted due to multiple tab switches.");
+        alert("🚨 Quiz auto-submitted due to multiple tab switches OR Time Out.");
         navigate("/quizzes");
       }, 300);
     }
